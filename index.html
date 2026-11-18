@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0c1218">
+<meta name="robots" content="noindex,nofollow">
+<!-- חוסם כל יציאה לרשת. אין fetch, אין שליחת טופס, אין משאב חיצוני.
+     גם אם מישהו היה מצליח להזריק קוד לדף, הוא לא יוכל לשלוח כלום החוצה. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'">
+<title>הצפנת סיסמאות</title>
+<style>
+  :root{
+    --bg:#0c1218; --card:#141e28; --card2:#1b2836; --line:#263646;
+    --ink:#e8eef4; --dim:#8ba0b4; --acc:#4b9fe8;
+    --ok:#35c88a; --warn:#e0a94f; --err:#e8615a;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:var(--bg);color:var(--ink);line-height:1.55;
+    font-family:-apple-system,"Segoe UI",Rubik,Arial,sans-serif;
+    padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+  .wrap{max-width:640px;margin:0 auto;padding:18px 15px 40px}
+  h1{font-size:21px;margin:0 0 2px}
+  .sub{color:var(--dim);font-size:12.5px;margin-bottom:16px}
+
+  /* ---------- לשוניות ---------- */
+  .tabs{display:flex;background:var(--card);border:1px solid var(--line);
+    border-radius:11px;padding:4px;margin-bottom:14px}
+  .tabs b{flex:1;text-align:center;padding:10px;font-size:14.5px;
+    border-radius:8px;cursor:pointer;color:var(--dim);font-weight:700}
+  .tabs b.on{background:var(--acc);color:#07141f}
+
+  .card{background:var(--card);border:1px solid var(--line);
+    border-radius:13px;padding:15px;margin-bottom:12px}
+  label{display:block;font-size:13px;font-weight:700;margin-bottom:6px}
+  .hint{font-size:11.5px;color:var(--dim);font-weight:400}
+  textarea,input{width:100%;padding:12px;font-size:15px;font-family:
+    ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    background:var(--card2);color:var(--ink);border:1px solid var(--line);
+    border-radius:10px;direction:ltr;text-align:left;resize:vertical}
+  textarea{min-height:90px}
+  input:focus,textarea:focus{outline:2px solid var(--acc);outline-offset:0}
+  .eye{display:flex;gap:8px;align-items:center;margin-top:7px;
+    font-size:12.5px;color:var(--dim);cursor:pointer;user-select:none}
+  .eye input{width:auto}
+
+  /* ---------- מד חוזק ---------- */
+  .meter{margin-top:9px}
+  .bar{height:6px;background:var(--card2);border-radius:99px;overflow:hidden;
+    display:flex;gap:2px}
+  .bar i{flex:1;background:var(--card2);border-radius:99px;transition:.2s}
+  .mtxt{font-size:11.5px;margin-top:5px;color:var(--dim)}
+
+  button{font-family:inherit;font-size:15.5px;font-weight:800;padding:14px;
+    border:none;border-radius:11px;cursor:pointer;background:var(--acc);
+    color:#07141f;width:100%}
+  button:disabled{opacity:.4;cursor:default}
+  button.alt{background:var(--card2);color:var(--ink);
+    border:1px solid var(--line);font-size:13.5px;padding:10px;width:auto}
+  .row{display:flex;gap:8px;margin-top:9px}
+
+  #out{display:none}
+  .result{background:var(--card2);border:1px solid var(--line);
+    border-radius:10px;padding:12px;font-family:ui-monospace,monospace;
+    font-size:13px;direction:ltr;text-align:left;word-break:break-all;
+    max-height:190px;overflow:auto;user-select:all}
+  #msg{display:none;border-radius:11px;padding:12px 14px;font-size:13.5px;
+    margin-bottom:12px}
+  #msg.e{display:block;background:#2b1715;border:1px solid #5c2b26;color:#ffb8b2}
+  #msg.o{display:block;background:#10281c;border:1px solid #2c5c42;color:#9ae5bd}
+
+  details{background:var(--card);border:1px solid var(--line);
+    border-radius:13px;margin-top:12px}
+  summary{padding:13px 15px;font-size:13.5px;font-weight:700;cursor:pointer;
+    list-style:none}
+  summary::-webkit-details-marker{display:none}
+  summary::after{content:"▾";float:left;color:var(--dim)}
+  .body{padding:0 15px 14px;font-size:12.5px;color:var(--dim);line-height:1.7}
+  .body b{color:var(--ink)}
+  .body code{background:var(--card2);padding:1px 5px;border-radius:4px;
+    font-size:11.5px;direction:ltr;display:inline-block}
+  .note{font-size:11.5px;color:var(--dim);margin-top:14px;line-height:1.65}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>הצפנת סיסמאות</h1>
+  <div class="sub">AES-256-GCM · הכול קורה בדפדפן · שום דבר לא נשלח</div>
+
+  <div class="tabs">
+    <b id="tEnc" class="on">הצפנה</b>
+    <b id="tDec">פענוח</b>
+  </div>
+
+  <div id="msg"></div>
+
+  <div class="card">
+    <label id="lab1">הסיסמה להצפנה
+      <span class="hint" id="hint1">מה שתרצה להגן עליו</span></label>
+    <textarea id="secret" autocomplete="off" autocapitalize="off"
+      autocorrect="off" spellcheck="false" placeholder=""></textarea>
+    <label class="eye"><input type="checkbox" id="showSecret"> הצג</label>
+  </div>
+
+  <div class="card">
+    <label>קוד ההצפנה
+      <span class="hint">רק מי שיש לו אותו יוכל לפענח</span></label>
+    <input type="password" id="key" autocomplete="off" autocapitalize="off"
+      autocorrect="off" spellcheck="false">
+    <label class="eye"><input type="checkbox" id="showKey"> הצג</label>
+    <div class="meter" id="meter" style="display:none">
+      <div class="bar" id="bar"><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="mtxt" id="mtxt"></div>
+    </div>
+  </div>
+
+  <button id="go">הצפן</button>
+
+  <div class="card" id="out" style="margin-top:12px">
+    <label id="outlab">המחרוזת המוצפנת</label>
+    <div class="result" id="result"></div>
+    <div class="row">
+      <button class="alt" id="copy" style="flex:1">העתק</button>
+      <button class="alt" id="clear" style="flex:1">נקה הכול</button>
+    </div>
+  </div>
+
+  <details>
+    <summary>מה בדיוק קורה כאן</summary>
+    <div class="body">
+      <b>ההצפנה.</b> <code>AES-256-GCM</code>, הצפנה מאומתת. כלומר היא לא
+      רק מסתירה את התוכן אלא גם מזהה אם מישהו שינה את המחרוזת בדרך — ואז
+      הפענוח נכשל במקום להחזיר זבל.
+      <br><br>
+      <b>המפתח.</b> קוד ההצפנה לא משמש ישירות. הוא עובר
+      <code>PBKDF2-SHA256</code> עם <b>600,000 סיבובים</b> ומלח אקראי של
+      16 בתים, וכך נגזר מפתח של 256 ביט. הסיבובים הרבים הם מה שהופך ניחוש
+      בכוח לאיטי מאוד.
+      <br><br>
+      <b>כל הצפנה שונה.</b> המלח וה-IV נבחרים מחדש בכל פעם, ולכן הצפנה
+      של אותה סיסמה עם אותו קוד תיתן מחרוזת אחרת בכל פעם. זו תכונה, לא באג.
+      <br><br>
+      <b>מבנה המחרוזת.</b> base64 של:
+      <code>גרסה(1) + מלח(16) + IV(12) + מוצפן+חתימה</code>
+      <br><br>
+      <b>שום דבר לא נשלח.</b> אין שרת, אין בסיס נתונים, ואין אפילו
+      אפשרות טכנית לשלוח. הדף מגיע עם כלל אבטחה
+      (<code>connect-src 'none'</code>) שחוסם כל יציאה לרשת ברמת הדפדפן.
+      אפשר לנתק את האינטרנט אחרי שהדף נטען והכול ימשיך לעבוד.
+      <br><br>
+      <b>אין שמירה.</b> הדף לא שומר כלום, לא בזיכרון הדפדפן ולא בשום
+      מקום אחר. סגרת את הלשונית — הכול נעלם.
+    </div>
+  </details>
+
+  <div class="note">
+    חשוב: אם תאבד את קוד ההצפנה אין שום דרך לשחזר את הסיסמה. אין "שכחתי
+    סיסמה" ואין דלת אחורית — זה בדיוק מה שהופך את זה לבטוח.
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const ITER = 600000, VER = 1;
+const enc = new TextEncoder(), dec = new TextDecoder();
+let mode = "enc";
+
+/* ---------- בדיקת סביבה ---------- */
+if (!window.crypto || !window.crypto.subtle){
+  $("msg").className = "e";
+  $("msg").textContent = "הדפדפן לא מאפשר הצפנה בדף הזה. זה קורה כשנכנסים "
+    + "דרך http במקום https. פתח את הכתובת עם https ונסה שוב.";
+  $("go").disabled = true;
+}
+
+function msg(t, ok){
+  const m = $("msg");
+  if (!t){ m.className = ""; m.textContent = ""; return; }
+  m.className = ok ? "o" : "e";
+  m.textContent = t;
+}
+
+/* ---------- בסיס ---------- */
+function b64(bytes){
+  let s = "";
+  const CH = 0x8000;                       // בלוקים, אחרת מחרוזות ארוכות נופלות
+  for (let i = 0; i < bytes.length; i += CH)
+    s += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+  return btoa(s);
+}
+function unb64(str){
+  const bin = atob(str.replace(/\s+/g, ""));
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+async function deriveKey(pass, salt){
+  const base = await crypto.subtle.importKey(
+    "raw", enc.encode(pass), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey(
+    {name: "PBKDF2", salt, iterations: ITER, hash: "SHA-256"},
+    base, {name: "AES-GCM", length: 256}, false, ["encrypt", "decrypt"]);
+}
+
+async function encryptText(text, pass){
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv   = crypto.getRandomValues(new Uint8Array(12));
+  const key  = await deriveKey(pass, salt);
+  const ct = new Uint8Array(await crypto.subtle.encrypt(
+    {name: "AES-GCM", iv}, key, enc.encode(text)));
+  const out = new Uint8Array(29 + ct.length);
+  out[0] = VER; out.set(salt, 1); out.set(iv, 17); out.set(ct, 29);
+  return b64(out);
+}
+
+async function decryptText(blob, pass){
+  let raw;
+  try { raw = unb64(blob); }
+  catch { throw new Error("זו לא מחרוזת תקינה שנוצרה כאן."); }
+  if (raw.length < 30) throw new Error("המחרוזת קצרה מדי או חתוכה.");
+  if (raw[0] !== VER)  throw new Error("המחרוזת לא בפורמט המוכר.");
+  const key = await deriveKey(pass, raw.slice(1, 17));
+  const pt = await crypto.subtle.decrypt(
+    {name: "AES-GCM", iv: raw.slice(17, 29)}, key, raw.slice(29));
+  return dec.decode(pt);
+}
+
+/* ---------- מד חוזק ---------- */
+const COMMON = ["123456","password","12345678","qwerty","111111","123123",
+  "1234567890","abc123","iloveyou","admin","welcome","monkey","letmein",
+  "dragon","sunshine","princess","football","123456789","1234","12345"];
+
+function strength(p){
+  if (!p) return null;
+  let space = 0;
+  if (/[a-z]/.test(p)) space += 26;
+  if (/[A-Z]/.test(p)) space += 26;
+  if (/[0-9]/.test(p)) space += 10;
+  if (/[^A-Za-z0-9]/.test(p)) space += 33;
+  const bits = p.length * Math.log2(space || 1);
+
+  const low = p.toLowerCase();
+  // התאמה מלאה פוסלת תמיד. הכלה פוסלת רק בסיסמה קצרה — אחרת סיסמה
+  // ארוכה וחזקה שבמקרה מכילה "123456" בתוך רצף ספרות הייתה נפסלת,
+  // וזה מה שקרה בבדיקה על סיסמה בת 128 תווים.
+  if (COMMON.some(c => low === c))
+    return {bits: 10, level: 0, why: "זו סיסמה נפוצה מאוד. אפשר לנחש אותה מיד."};
+  if (p.length <= 16 && COMMON.some(c => low.includes(c)))
+    return {bits: 14, level: 0,
+            why: "מכיל סיסמה נפוצה וקצר מדי. אפשר לנחש אותו."};
+  if (/^(.)\1+$/.test(p))
+    return {bits: 8, level: 0, why: "אותו תו חוזר."};
+  if (p.length < 8)
+    return {bits, level: 0, why: "קצר מדי. פחות מ-8 תווים נשבר מהר."};
+
+  let level = 1;
+  if (bits >= 50) level = 2;
+  if (bits >= 70) level = 3;
+  if (bits >= 90) level = 4;
+  if (bits >= 110) level = 5;
+  const names = ["חלש מאוד","חלש","בינוני","טוב","חזק","חזק מאוד"];
+  return {bits, level, why: names[level] + " · כ-" + Math.round(bits) + " ביט"};
+}
+
+const COLORS = ["#e8615a","#e8615a","#e0a94f","#d7c04a","#35c88a","#35c88a"];
+function drawMeter(){
+  const p = $("key").value;
+  const s = strength(p);
+  $("meter").style.display = p ? "block" : "none";
+  if (!s) return;
+  [...$("bar").children].forEach((el, i) => {
+    el.style.background = i < s.level ? COLORS[s.level] : "var(--card2)";
+  });
+  $("mtxt").textContent = s.why;
+  $("mtxt").style.color = s.level <= 1 ? "var(--err)"
+    : s.level <= 2 ? "var(--warn)" : "var(--dim)";
+}
+$("key").addEventListener("input", drawMeter);
+
+/* ---------- לשוניות ---------- */
+function setMode(m){
+  mode = m;
+  $("tEnc").classList.toggle("on", m === "enc");
+  $("tDec").classList.toggle("on", m === "dec");
+  $("lab1").firstChild.nodeValue = m === "enc"
+    ? "הסיסמה להצפנה " : "המחרוזת המוצפנת ";
+  $("hint1").textContent = m === "enc"
+    ? "מה שתרצה להגן עליו" : "הדבק כאן את מה שקיבלת";
+  $("go").textContent = m === "enc" ? "הצפן" : "פענח";
+  $("outlab").textContent = m === "enc"
+    ? "המחרוזת המוצפנת" : "הסיסמה המקורית";
+  $("meter").style.display = (m === "enc" && $("key").value) ? "block" : "none";
+  $("out").style.display = "none";
+  msg("");
+}
+$("tEnc").onclick = () => setMode("enc");
+$("tDec").onclick = () => setMode("dec");
+
+$("showSecret").onchange = e => {
+  // textarea תמיד גלוי, אז מסתירים בעזרת מילוי חלופי
+  $("secret").style.webkitTextSecurity = e.target.checked ? "none" : "disc";
+};
+$("secret").style.webkitTextSecurity = "disc";
+$("showKey").onchange = e => {
+  $("key").type = e.target.checked ? "text" : "password";
+};
+
+/* ---------- פעולה ---------- */
+$("go").onclick = async () => {
+  const text = $("secret").value;
+  const key  = $("key").value;
+  if (!text.trim()) return msg(mode === "enc"
+    ? "לא הזנת סיסמה להצפנה." : "לא הדבקת מחרוזת מוצפנת.");
+  if (!key) return msg("לא הזנת קוד הצפנה.");
+
+  msg("");
+  $("go").disabled = true;
+  $("go").textContent = mode === "enc" ? "מצפין…" : "מפענח…";
+  // נותנים לדפדפן לצייר לפני החישוב הכבד, אחרת הכפתור נראה תקוע
+  await new Promise(r => setTimeout(r, 30));
+
+  try {
+    const res = mode === "enc"
+      ? await encryptText(text, key)
+      : await decryptText(text, key);
+    $("result").textContent = res;
+    $("out").style.display = "block";
+    msg(mode === "enc" ? "הוצפן. העתק את המחרוזת ושמור אותה."
+                       : "פוענח בהצלחה.", true);
+    $("out").scrollIntoView({behavior: "smooth", block: "nearest"});
+  } catch (e) {
+    // GCM נכשל גם על מפתח שגוי וגם על מחרוזת שהשתנתה. אי אפשר
+    // להבדיל ביניהם, וזו תכונה של ההצפנה ולא חוסר מידע.
+    msg(mode === "dec"
+      ? (e.message && !/decrypt/i.test(e.message) ? e.message
+         : "הפענוח נכשל. או שקוד ההצפנה שגוי, או שהמחרוזת שונתה.")
+      : "ההצפנה נכשלה: " + e.message);
+    $("out").style.display = "none";
+  }
+  $("go").disabled = false;
+  $("go").textContent = mode === "enc" ? "הצפן" : "פענח";
+};
+
+$("copy").onclick = async () => {
+  const t = $("result").textContent;
+  try {
+    await navigator.clipboard.writeText(t);
+    msg("הועתק.", true);
+  } catch {
+    // דפדפנים ישנים, או הקשר שלא מרשה גישה ללוח
+    const r = document.createRange();
+    r.selectNodeContents($("result"));
+    const sel = window.getSelection();
+    sel.removeAllRanges(); sel.addRange(r);
+    msg("סמן והעתק ידנית.", true);
+  }
+};
+
+$("clear").onclick = () => {
+  $("secret").value = ""; $("key").value = "";
+  $("result").textContent = ""; $("out").style.display = "none";
+  $("meter").style.display = "none";
+  msg("");
+};
+
+setMode("enc");
+</script>
+</body>
+</html>
