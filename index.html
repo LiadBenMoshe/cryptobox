@@ -105,7 +105,7 @@
 
   <div class="card">
     <label>קוד ההצפנה
-      <span class="hint">רק מי שיש לו אותו יוכל לפענח</span></label>
+      <span class="hint">מ-6 תווים · רק מי שיש לו אותו יוכל לפענח</span></label>
     <input type="password" id="key" autocomplete="off" autocapitalize="off"
       autocorrect="off" spellcheck="false">
     <label class="eye"><input type="checkbox" id="showKey"> הצג</label>
@@ -163,6 +163,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const ITER = 600000, VER = 1;
+const MIN_KEY = 6;        // האורך המינימלי לקוד הצפנה
 const enc = new TextEncoder(), dec = new TextDecoder();
 let mode = "enc";
 
@@ -252,8 +253,9 @@ function strength(p){
             why: "מכיל סיסמה נפוצה וקצר מדי. אפשר לנחש אותו."};
   if (/^(.)\1+$/.test(p))
     return {bits: 8, level: 0, why: "אותו תו חוזר."};
-  if (p.length < 8)
-    return {bits, level: 0, why: "קצר מדי. פחות מ-8 תווים נשבר מהר."};
+  if (p.length < MIN_KEY)
+    return {bits, level: 0,
+            why: "קצר מדי. המינימום הוא " + MIN_KEY + " תווים."};
 
   let level = 1;
   if (bits >= 50) level = 2;
@@ -314,6 +316,9 @@ $("go").onclick = async () => {
   if (!text.trim()) return msg(mode === "enc"
     ? "לא הזנת סיסמה להצפנה." : "לא הדבקת מחרוזת מוצפנת.");
   if (!key) return msg("לא הזנת קוד הצפנה.");
+  if (key.length < MIN_KEY)
+    return msg("קוד ההצפנה חייב להיות לפחות " + MIN_KEY + " תווים. "
+               + "הזנת " + key.length + ".");
 
   msg("");
   $("go").disabled = true;
