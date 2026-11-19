@@ -190,8 +190,16 @@ function b64(bytes){
     s += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
   return btoa(s);
 }
+/* מנקה מחרוזת מוצפנת שעברה דרך אפליקציית הודעות.
+   בדרך נדבקים אליה דברים שה-atob של הדפדפן זורק עליהם שגיאה:
+   תווי כיווניות בלתי נראים, רוחב-אפס, מרכאות, נקודה בסוף, או טקסט
+   שנכתב לפניה. משאירים רק את התווים שבאמת שייכים ל-base64. */
+function cleanBlob(str){
+  return String(str).replace(/[^A-Za-z0-9+/=]/g, "");
+}
+
 function unb64(str){
-  const bin = atob(str.replace(/\s+/g, ""));
+  const bin = atob(cleanBlob(str));
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
   return out;
@@ -217,15 +225,42 @@ async function encryptText(text, pass){
 }
 
 async function decryptText(blob, pass){
+  const clean = cleanBlob(blob);
+  if (!clean) throw new Error("לא נמצאה מחרוזת. בדוק שהעתקת אותה.");
+
   let raw;
-  try { raw = unb64(blob); }
-  catch { throw new Error("זו לא מחרוזת תקינה שנוצרה כאן."); }
-  if (raw.length < 30) throw new Error("המחרוזת קצרה מדי או חתוכה.");
-  if (raw[0] !== VER)  throw new Error("המחרוזת לא בפורמט המוכר.");
+  try { raw = unb64(clean); }
+  catch { throw new Error("המחרוזת פגומה. העתק אותה שוב במלואה."); }
+
+  // מחרוזת תקינה היא לפחות 29 בתים כותרת ועוד 16 בתים חתימת GCM
+  if (raw.length < 45)
+    throw new Error("המחרוזת חתוכה — התקבלו " + raw.length + " בתים "
+                    + "במקום 45 לפחות. כנראה חלק ממנה לא הועתק.");
+  if (raw[0] !== VER)
+    throw new Error("ההתחלה של המחרוזת חסרה או שונתה. ודא שהעתקת "
+                    + "מהתו הראשון.");
+
   const key = await deriveKey(pass, raw.slice(1, 17));
   const pt = await crypto.subtle.decrypt(
     {name: "AES-GCM", iv: raw.slice(17, 29)}, key, raw.slice(29));
   return dec.decode(pt);
+}
+
+/* מנסה את הקוד כפי שהוא, ואם נכשל — בלי רווחים בקצוות.
+   רווח נדבק בקלות בהעתקה מהודעה, והמשתמש לא רואה אותו.
+   מחזיר גם מה עבד, כדי שאפשר יהיה לומר לו. */
+async function decryptSmart(blob, pass){
+  try {
+    return {text: await decryptText(blob, pass), fixed: null};
+  } catch (first) {
+    const t = pass.trim();
+    if (t && t !== pass){
+      try {
+        return {text: await decryptText(blob, t), fixed: "רווח בקצה הקוד"};
+      } catch (_) { /* גם זה נכשל, נזרוק את השגיאה המקורית */ }
+    }
+    throw first;
+  }
 }
 
 /* ---------- מד חוזק ---------- */
@@ -327,20 +362,31 @@ $("go").onclick = async () => {
   await new Promise(r => setTimeout(r, 30));
 
   try {
-    const res = mode === "enc"
-      ? await encryptText(text, key)
-      : await decryptText(text, key);
+    let res, note = "";
+    if (mode === "enc"){
+      res = await encryptText(text, key);
+    } else {
+      const r = await decryptSmart(text, key);
+      res = r.text;
+      if (r.fixed) note = " (תוקן: " + r.fixed + ")";
+    }
     $("result").textContent = res;
     $("out").style.display = "block";
     msg(mode === "enc" ? "הוצפן. העתק את המחרוזת ושמור אותה."
-                       : "פוענח בהצלחה.", true);
+                       : "פוענח בהצלחה." + note, true);
     $("out").scrollIntoView({behavior: "smooth", block: "nearest"});
   } catch (e) {
     // GCM נכשל גם על מפתח שגוי וגם על מחרוזת שהשתנתה. אי אפשר
     // להבדיל ביניהם, וזו תכונה של ההצפנה ולא חוסר מידע.
+    // שגיאת GCM לא מבדילה בין מפתח שגוי לבין מחרוזת שהשתנתה — זו
+    // תכונה של ההצפנה. ההודעות שלנו כן מבדילות בין "המחרוזת פגומה",
+    // שאותה אפשר לזהות מראש, לבין כישלון הפענוח עצמו.
+    const own = e.message && !/decrypt|operation/i.test(e.message);
     msg(mode === "dec"
-      ? (e.message && !/decrypt/i.test(e.message) ? e.message
-         : "הפענוח נכשל. או שקוד ההצפנה שגוי, או שהמחרוזת שונתה.")
+      ? (own ? e.message
+             : "הפענוח נכשל. הסיבה היא אחת משתיים: קוד ההצפנה שונה "
+               + "ממה שהצפין, או שהמחרוזת לא הועתקה במלואה. "
+               + "בדוק שהעתקת את כולה, ושאין הבדל באותיות גדולות וקטנות.")
       : "ההצפנה נכשלה: " + e.message);
     $("out").style.display = "none";
   }
